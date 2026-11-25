@@ -1,0 +1,37 @@
+# Gradle & Android Build Outputs
+.gradle/
+build/
+app/build/
+**/build/
+captures/
+.externalNativeBuild
+.cxx/
+*.iml
+.idea/
+
+# Local Environment & Secrets (Never commit secrets!)
+local.properties
+.env
+.env.*
+!.env.example
+debug.keystore
+*.jks
+*.keystore
+
+# Node & Firebase
+node_modules/
+functions/node_modules/
+functions/.env
+functions/.env.*
+firebase-debug.log*
+firestore-debug.log*
+*-debug.log
+*.log
+
+# AI Studio Internal Cache & Artifacts
+.aistudio/
+.inspect_tmp/
+
+# OS specific files
+.DS_Store
+Thumbs.db

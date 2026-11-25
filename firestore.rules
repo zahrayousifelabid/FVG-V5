@@ -1,0 +1,882 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isPlatformOwner() {
+      return isSignedIn() &&
+             'email_verified' in request.auth.token &&
+             request.auth.token.email_verified == true &&
+             'email' in request.auth.token &&
+             request.auth.token.email is string &&
+             request.auth.token.email.lower() == 'financialvisionguide@gmail.com';
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isOptStr(data, field, maxLen) {
+      return !(field in data) || data[field] == null || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isValidMemberList(listVal) {
+      return listVal is list && listVal.size() >= 1 && listVal.size() <= 20 && listVal[0] is string;
+    }
+
+    function orgDoc(orgId) {
+      return get(/databases/$(database)/documents/organizations/$(orgId));
+    }
+
+    function isOrgMember(orgId) {
+      return exists(/databases/$(database)/documents/organizations/$(orgId)) &&
+             request.auth.uid in orgDoc(orgId).data.memberUids;
+    }
+
+    function canWriteFinancials(orgId) {
+      return isOrgMember(orgId) &&
+             orgDoc(orgId).data.roles[request.auth.uid] in ['owner', 'admin', 'accountant'];
+    }
+
+    function isOrgAdmin(orgId) {
+      return isOrgMember(orgId) &&
+             orgDoc(orgId).data.roles[request.auth.uid] in ['owner', 'admin'];
+    }
+
+    function hasValidTenantEnvelope(data, orgId) {
+      return data.orgId == orgId &&
+             isStr(data.ownerId, 1, 128) &&
+             isValidMemberList(data.memberUids) &&
+             request.auth.uid in data.memberUids &&
+             isStr(data.createdBy, 1, 128) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    // --- Validation Helpers ---
+
+    function isValidUserProfile(data, userId, isCreate) {
+      return data.userId == userId &&
+             isStr(data.email, 3, 200) &&
+             isStr(data.displayName, 1, 120) &&
+             isOptStr(data, 'activeOrgId', 128) &&
+             data.preferredLanguage in ['en', 'ar'] &&
+             (!('darkMode' in data) || data.darkMode is bool) &&
+             (!('themeMode' in data) || data.themeMode in ['light', 'dark', 'system']) &&
+             (!('fontScale' in data) || (data.fontScale is number && data.fontScale >= 0.80 && data.fontScale <= 1.35)) &&
+             isOptStr(data, 'timezone', 80) &&
+             isOptStr(data, 'dateFormat', 32) &&
+             isOptStr(data, 'numberFormat', 16) &&
+             isOptStr(data, 'defaultCurrency', 5) &&
+             isOptStr(data, 'avatarLocalRef', 300) &&
+             isOptStr(data, 'contactPhoneOptional', 32) &&
+             (!('tourCompleted' in data) || data.tourCompleted is bool) &&
+             (!('notificationsEnabled' in data) || data.notificationsEnabled is bool) &&
+             ((isCreate && data.trialDurationHours == 168) || (!isCreate && data.trialDurationHours in [72, 168])) &&
+             isValidTimestamp(data.trialStartedAt) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidOrganization(data, isCreate) {
+      return isStr(data.name, 1, 120) &&
+             isStr(data.baseCurrency, 3, 5) &&
+             isOptStr(data, 'sectorType', 60) &&
+             isOptStr(data, 'brandTagline', 200) &&
+             isOptStr(data, 'countryState', 100) &&
+             isOptStr(data, 'fiscalYearStart', 10) &&
+             (!('taxEnabled' in data) || data.taxEnabled is bool) &&
+             isOptStr(data, 'defaultTaxRatePct', 20) &&
+             isStr(data.ownerId, 1, 128) &&
+             isValidMemberList(data.memberUids) &&
+             data.ownerId in data.memberUids &&
+             data.roles is map &&
+             data.roles[data.ownerId] == 'owner' &&
+             isValidId(data.planTier) &&
+             data.subscriptionStatus in ['trial', 'active', 'cancelled', 'expired'] &&
+             ((isCreate && data.trialDurationHours == 168) || (!isCreate && data.trialDurationHours in [72, 168])) &&
+             isValidTimestamp(data.trialStartedAt) &&
+             data.trialEndsAt is timestamp && data.trialEndsAt >= data.trialStartedAt &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidProduct(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.name, 1, 160) &&
+             isOptStr(data, 'sku', 64) &&
+             isStr(data.category, 1, 80) &&
+             isOptStr(data, 'description', 500) &&
+             isStr(data.unit, 1, 40) &&
+             isStr(data.currency, 3, 5) &&
+             isOptStr(data, 'location', 120) &&
+             isOptStr(data, 'source', 120) &&
+             isStr(data.currentPrice, 1, 40) &&
+             isStr(data.previousPrice, 1, 40);
+    }
+
+    function isValidPriceObservation(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.productId, 1, 128) &&
+             isStr(data.productName, 1, 160) &&
+             isStr(data.category, 1, 80) &&
+             isStr(data.unit, 1, 40) &&
+             isStr(data.currency, 3, 5) &&
+             isStr(data.price, 1, 40) &&
+             isStr(data.previousPrice, 1, 40) &&
+             isStr(data.absChange, 1, 40) &&
+             isStr(data.pctChange, 1, 40) &&
+             data.direction in ['increased', 'decreased', 'unchanged'] &&
+             isStr(data.source, 1, 120) &&
+             isStr(data.location, 1, 120) &&
+             isStr(data.observationDate, 4, 32) &&
+             isOptStr(data, 'notes', 500) &&
+             isOptStr(data, 'attachmentRef', 300);
+    }
+
+    function isValidInflationRecord(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.period, 4, 32) &&
+             isStr(data.category, 1, 80) &&
+             isStr(data.monthlyRatePct, 1, 40) &&
+             isOptStr(data, 'annualRatePct', 40) &&
+             isStr(data.indexValue, 1, 40) &&
+             isStr(data.basePeriod, 4, 32) &&
+             data.sourceType in ['official', 'manual', 'calculated', 'provisional'] &&
+             isStr(data.sourceName, 1, 160) &&
+             isStr(data.formulaNote, 1, 400);
+    }
+
+    function isValidPriceBasket(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.name, 1, 120) &&
+             isStr(data.basePeriod, 4, 32) &&
+             isStr(data.currentPeriod, 4, 32) &&
+             isStr(data.currency, 3, 5) &&
+             data.version is int && data.version >= 1 &&
+             data.items is list && data.items.size() <= 50 &&
+             isStr(data.baseCost, 1, 40) &&
+             isStr(data.currentCost, 1, 40) &&
+             isStr(data.indexValue, 1, 40) &&
+             (!('periodSnapshots' in data) || (data.periodSnapshots is list && data.periodSnapshots.size() <= 50));
+    }
+
+    function isValidFxRate(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.baseCurrency, 3, 5) &&
+             isStr(data.quoteCurrency, 3, 5) &&
+             isStr(data.rate, 1, 40) &&
+             isStr(data.effectiveDate, 4, 32) &&
+             isOptStr(data, 'effectiveTime', 16) &&
+             data.rateType in ['official', 'market', 'manual'] &&
+             isOptStr(data, 'sourceKind', 32) &&
+             isStr(data.sourceName, 0, 120) &&
+             (!('status' in data) || data.status in ['draft', 'approved', 'cancelled']) &&
+             isOptStr(data, 'notes', 300);
+    }
+
+    function isValidCostSnapshot(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.productId, 1, 128) &&
+             isStr(data.productName, 1, 160) &&
+             isStr(data.period, 4, 32) &&
+             isStr(data.currency, 3, 5) &&
+             data.costingMethod in ['standard', 'actual', 'target', 'abc', 'job_order', 'process', 'absorption', 'variable'] &&
+             isStr(data.directMaterial, 1, 40) &&
+             isOptStr(data, 'indirectMaterial', 40) &&
+             isStr(data.directLabor, 1, 40) &&
+             isOptStr(data, 'indirectLabor', 40) &&
+             isStr(data.overhead, 1, 40) &&
+             isOptStr(data, 'energyFuel', 40) &&
+             isOptStr(data, 'packaging', 40) &&
+             isOptStr(data, 'transport', 40) &&
+             isOptStr(data, 'wasteScrap', 40) &&
+             isOptStr(data, 'fixedCosts', 40) &&
+             isStr(data.goodUnits, 1, 40) &&
+             isStr(data.totalCost, 1, 40) &&
+             isStr(data.unitCost, 1, 40) &&
+             isStr(data.sellingPrice, 1, 40) &&
+             isOptStr(data, 'revenue', 40) &&
+             isOptStr(data, 'grossProfit', 40) &&
+             isOptStr(data, 'netProfit', 40) &&
+             isStr(data.profitMarginPct, 1, 40) &&
+             isStr(data.markupPct, 1, 40) &&
+             isOptStr(data, 'breakEvenUnits', 40) &&
+             (!('riskLevel' in data) || data.riskLevel == null || data.riskLevel in ['low', 'medium', 'high']) &&
+             isStr(data.formulaVersion, 1, 32);
+    }
+
+    function isValidScenario(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.snapshotId, 1, 128) &&
+             isStr(data.name, 1, 120) &&
+             isOptStr(data, 'scenarioType', 60) &&
+             isStr(data.materialChangePct, 1, 40) &&
+             isStr(data.laborChangePct, 1, 40) &&
+             isStr(data.overheadChangePct, 1, 40) &&
+             isStr(data.priceChangePct, 1, 40) &&
+             isOptStr(data, 'fxChangePct', 40) &&
+             isOptStr(data, 'volumeChangePct', 40) &&
+             isStr(data.baseTotalCost, 1, 40) &&
+             isStr(data.scenarioTotalCost, 1, 40) &&
+             isStr(data.baseProfit, 1, 40) &&
+             isStr(data.scenarioProfit, 1, 40);
+    }
+
+    function isValidAccount(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.code, 1, 32) &&
+             isStr(data.name, 1, 120) &&
+             isOptStr(data, 'nameAr', 120) &&
+             data.accountType in ['asset', 'liability', 'equity', 'revenue', 'expense', 'cogs'] &&
+             isStr(data.subType, 1, 60) &&
+             data.normalBalance in ['debit', 'credit'] &&
+             isStr(data.openingBalance, 1, 40);
+    }
+
+    function isValidJournalEntry(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.referenceNo, 1, 64) &&
+             isStr(data.entryDate, 4, 32) &&
+             isStr(data.period, 4, 32) &&
+             isStr(data.description, 1, 400) &&
+             isStr(data.currency, 3, 5) &&
+             isStr(data.exchangeRate, 1, 40) &&
+             isOptStr(data, 'originalCurrency', 5) &&
+             isOptStr(data, 'originalAmount', 40) &&
+             data.status in ['draft', 'posted', 'reversed'] &&
+             data.lines is list && data.lines.size() >= 2 && data.lines.size() <= 40 &&
+             isStr(data.totalDebit, 1, 40) &&
+             isStr(data.totalCredit, 1, 40) &&
+             data.totalDebit == data.totalCredit &&
+             isOptStr(data, 'sourceModule', 64) &&
+             isOptStr(data, 'reversedEntryId', 128);
+    }
+
+    function isValidCounterpartyItem(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             data.type in ['receivable', 'payable'] &&
+             isStr(data.partyName, 1, 160) &&
+             isStr(data.invoiceNo, 1, 64) &&
+             isStr(data.currency, 3, 5) &&
+             isStr(data.amount, 1, 40) &&
+             isStr(data.paidAmount, 1, 40) &&
+             isStr(data.dueDate, 4, 32) &&
+             data.status in ['open', 'partial', 'paid'];
+    }
+
+    function isValidBudget(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.name, 1, 120) &&
+             data.budgetType in ['annual', 'monthly', 'revenue', 'expense', 'cash', 'operating'] &&
+             isStr(data.period, 4, 32) &&
+             data.version is int && data.version >= 1 &&
+             isStr(data.currency, 3, 5) &&
+             isStr(data.plannedAmount, 1, 40) &&
+             isStr(data.actualAmount, 1, 40) &&
+             isStr(data.variance, 1, 40) &&
+             isStr(data.variancePct, 1, 40) &&
+             isOptStr(data, 'explanation', 500) &&
+             data.status in ['draft', 'approved', 'superseded'];
+    }
+
+    function isValidInventoryItem(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.sku, 1, 64) &&
+             isStr(data.name, 1, 160) &&
+             data.itemType in ['raw_material', 'finished_good'] &&
+             isStr(data.unit, 1, 40) &&
+             isStr(data.warehouse, 1, 120) &&
+             isStr(data.currency, 3, 5) &&
+             data.valuationMethod in ['fifo', 'moving_avg'] &&
+             isStr(data.quantityOnHand, 1, 40) &&
+             isStr(data.totalBookValue, 1, 40) &&
+             isStr(data.movingAvgCost, 1, 40) &&
+             isStr(data.currentMarketPrice, 1, 40) &&
+             isOptStr(data, 'batchNumber', 64) &&
+             isOptStr(data, 'expiryDate', 32) &&
+             data.fifoLots is list && data.fifoLots.size() <= 100;
+    }
+
+    function isValidInventoryMovement(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.itemId, 1, 128) &&
+             isStr(data.itemName, 1, 160) &&
+             data.movementType in ['receipt', 'issue', 'transfer', 'return', 'adjustment', 'scrap', 'damaged', 'expired'] &&
+             isStr(data.quantity, 1, 40) &&
+             isStr(data.unitCost, 1, 40) &&
+             isStr(data.totalCost, 1, 40) &&
+             isStr(data.warehouse, 1, 120) &&
+             isStr(data.reason, 1, 300) &&
+             isStr(data.referenceNo, 1, 64) &&
+             isStr(data.movementDate, 4, 32);
+    }
+
+    function isValidStocktake(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.sessionName, 1, 160) &&
+             isStr(data.warehouse, 1, 120) &&
+             isStr(data.sessionDate, 4, 32) &&
+             data.status in ['draft', 'in_review', 'approved', 'rejected', 'posted'] &&
+             data.lines is list && data.lines.size() <= 100 &&
+             isStr(data.totalDiscrepancyValue, 1, 40) &&
+             isOptStr(data, 'reviewedBy', 128);
+    }
+
+    function isValidOcrDraft(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.fileName, 1, 160) &&
+             isOptStr(data, 'invoiceNumber', 80) &&
+             isStr(data.extractedText, 1, 10000) &&
+             isStr(data.vendorName, 0, 160) &&
+             isStr(data.documentDate, 0, 40) &&
+             isStr(data.currency, 0, 10) &&
+             isOptStr(data, 'subtotalAmount', 40) &&
+             isOptStr(data, 'discountAmount', 40) &&
+             isOptStr(data, 'taxAmount', 40) &&
+             isStr(data.totalAmount, 0, 40) &&
+             isOptStr(data, 'confidenceNote', 200) &&
+             isOptStr(data, 'lineSummary', 2000) &&
+             isOptStr(data, 'duplicateWarning', 200) &&
+             data.reviewStatus in ['pending_review', 'verified', 'rejected'];
+    }
+
+    function isValidAuditLog(data, orgId) {
+      return data.orgId == orgId &&
+             isStr(data.ownerId, 1, 128) &&
+             isValidMemberList(data.memberUids) &&
+             (request.auth.uid in data.memberUids || isPlatformOwner()) &&
+             isStr(data.createdBy, 1, 128) &&
+             isStr(data.action, 1, 80) &&
+             isStr(data.entityType, 1, 80) &&
+             isStr(data.entityId, 1, 128) &&
+             isStr(data.summary, 1, 500) &&
+             isStr(data.actorEmail, 1, 200) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    function isValidStandardCost(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.productId, 1, 128) &&
+             isStr(data.productName, 1, 160) &&
+             data.version is int && data.version >= 1 &&
+             isStr(data.currency, 3, 5) &&
+             isStr(data.standardMaterialCost, 1, 40) &&
+             isStr(data.standardLaborHours, 1, 40) &&
+             isStr(data.standardLaborRate, 1, 40) &&
+             isStr(data.standardOverheadPerUnit, 1, 40) &&
+             isStr(data.standardUnitCost, 1, 40) &&
+             isOptStr(data, 'notes', 500);
+    }
+
+    function isValidBomFormula(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.productName, 1, 160) &&
+             isStr(data.outputUnit, 1, 40) &&
+             isStr(data.batchSize, 1, 40) &&
+             data.ingredients is list && data.ingredients.size() <= 40 &&
+             isStr(data.unitMaterialCost, 1, 40) &&
+             isStr(data.scrapAllowancePct, 1, 40) &&
+             isOptStr(data, 'notes', 500);
+    }
+
+    function isValidProductionOrder(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.productId, 1, 128) &&
+             isStr(data.productName, 1, 160) &&
+             isStr(data.period, 4, 32) &&
+             isStr(data.currency, 3, 5) &&
+             isStr(data.plannedUnits, 1, 40) &&
+             isStr(data.goodUnits, 1, 40) &&
+             isStr(data.scrapUnits, 1, 40) &&
+             isStr(data.actualMaterialCost, 1, 40) &&
+             isStr(data.actualLaborCost, 1, 40) &&
+             isStr(data.actualOverheadCost, 1, 40) &&
+             isStr(data.actualTotalCost, 1, 40) &&
+             data.status in ['planned', 'in_progress', 'completed'] &&
+             data.stages is list && data.stages.size() <= 30;
+    }
+
+    function isValidScrapLoss(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.itemId, 1, 128) &&
+             isStr(data.itemName, 1, 160) &&
+             data.lossType in ['scrap', 'damaged', 'expired'] &&
+             isStr(data.quantity, 1, 40) &&
+             isStr(data.unitCost, 1, 40) &&
+             isStr(data.totalLossCost, 1, 40) &&
+             isStr(data.reason, 1, 300) &&
+             isStr(data.lossDate, 4, 32) &&
+             data.status in ['pending_approval', 'approved', 'rejected'] &&
+             isOptStr(data, 'reviewedBy', 128);
+    }
+
+    function isValidPaymentRequest(data, orgId) {
+      return data.orgId == orgId &&
+             isStr(data.ownerId, 1, 128) &&
+             isValidMemberList(data.memberUids) &&
+             (request.auth.uid in data.memberUids || isPlatformOwner()) &&
+             isStr(data.createdBy, 1, 128) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt) &&
+             isValidId(data.planTier) && data.planTier != 'trial' &&
+             data.paymentMethod in ['bankak', 'ocash', 'fawry', 'bank_transfer'] &&
+             isStr(data.amount, 1, 40) &&
+             isStr(data.currency, 3, 5) &&
+             isStr(data.senderName, 1, 160) &&
+             isStr(data.referenceNo, 2, 80) &&
+             isOptStr(data, 'last4Digits', 16) &&
+             isStr(data.transferDate, 4, 32) &&
+             isOptStr(data, 'attachmentNote', 300) &&
+             isOptStr(data, 'notes', 500) &&
+             isOptStr(data, 'receiptMatchStatus', 40) &&
+             isOptStr(data, 'receiptMatchNote', 300) &&
+             isOptStr(data, 'expectedPlanAmount', 40) &&
+             data.status in ['pending_verification', 'approved', 'rejected'] &&
+             isOptStr(data, 'reviewedBy', 128) &&
+             isOptStr(data, 'decisionActorEmail', 200) &&
+             isOptStr(data, 'reviewNotes', 400);
+    }
+
+    function isValidAiConversation(data, orgId) {
+      return hasValidTenantEnvelope(data, orgId) &&
+             isStr(data.title, 1, 160) &&
+             data.mode in ['general', 'financial', 'ocr'] &&
+             data.messages is list && data.messages.size() <= 100;
+    }
+
+    // --- Platform Owner CollectionGroup access for Payment Verification Queue ---
+
+    match /{path=**}/paymentRequests/{requestId} {
+      allow read: if isPlatformOwner();
+    }
+
+    // --- Public / Platform Configuration Collections ---
+
+    match /platformPlans/{planId} {
+      allow read: if true;
+      allow create, update: if isPlatformOwner() &&
+                               isValidId(planId) &&
+                               isStr(incoming().key, 1, 40) &&
+                               isStr(incoming().nameEn, 1, 120) &&
+                               isStr(incoming().nameAr, 1, 120) &&
+                               isStr(incoming().priceUsd, 1, 20) &&
+                               isStr(incoming().priceSdg, 1, 20) &&
+                               (!('tierLevel' in incoming()) || (incoming().tierLevel is int && incoming().tierLevel >= 0 && incoming().tierLevel <= 10)) &&
+                               (!('maxOrgs' in incoming()) || (incoming().maxOrgs is int && incoming().maxOrgs >= 1 && incoming().maxOrgs <= 1000)) &&
+                               (!('maxUsers' in incoming()) || (incoming().maxUsers is int && incoming().maxUsers >= 1 && incoming().maxUsers <= 10000)) &&
+                               (!('maxProducts' in incoming()) || (incoming().maxProducts is int && incoming().maxProducts >= 1 && incoming().maxProducts <= 100000)) &&
+                               (!('allowAllCostingMethods' in incoming()) || incoming().allowAllCostingMethods is bool) &&
+                               (!('allowBomAndProduction' in incoming()) || incoming().allowBomAndProduction is bool) &&
+                               (!('allowAiAssistant' in incoming()) || incoming().allowAiAssistant is bool) &&
+                               (!('allowOcr' in incoming()) || incoming().allowOcr is bool) &&
+                               (!('allowPdfXlsxExport' in incoming()) || incoming().allowPdfXlsxExport is bool) &&
+                               (!('allowAuditAndBackup' in incoming()) || incoming().allowAuditAndBackup is bool) &&
+                               (!('allowSectorAdvancedTools' in incoming()) || incoming().allowSectorAdvancedTools is bool);
+      allow delete: if isPlatformOwner() && isValidId(planId);
+    }
+
+    match /announcements/{annId} {
+      allow read: if true;
+      allow create, update: if isPlatformOwner() &&
+                               isValidId(annId) &&
+                               isStr(incoming().titleEn, 1, 160) &&
+                               isStr(incoming().titleAr, 1, 160) &&
+                               isStr(incoming().bodyEn, 1, 1000) &&
+                               isStr(incoming().bodyAr, 1, 1000) &&
+                               (!('targetAudience' in incoming()) || incoming().targetAudience in ['all', 'trial', 'paid', 'specific_email']) &&
+                               isOptStr(incoming(), 'targetEmail', 200);
+      allow delete: if isPlatformOwner() && isValidId(annId);
+    }
+
+    match /mail/{mailId} {
+      allow get, list: if isPlatformOwner() || (isSignedIn() && existing().createdBy == request.auth.uid);
+      allow create: if isSignedIn() &&
+                       isValidId(mailId) &&
+                       incoming().from == 'Financialvisionguide@gmail.com' &&
+                       incoming().to is list && incoming().to.size() >= 1 && incoming().to.size() <= 50 &&
+                       incoming().mailType in ['welcome', 'notification', 'payment_update', 'trial_expired'] &&
+                       incoming().message is map &&
+                       isStr(incoming().message.subject, 1, 200) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       (
+                         isPlatformOwner() ||
+                         (
+                           mailId == ('welcome_' + request.auth.uid) &&
+                           incoming().createdBy == request.auth.uid &&
+                           incoming().mailType == 'welcome' &&
+                           incoming().to.size() == 1
+                         )
+                       );
+      allow update, delete: if isPlatformOwner();
+    }
+
+    match /platformVisits/{visitId} {
+      allow get, list: if isPlatformOwner();
+      allow create: if isValidId(visitId) &&
+                       incoming().platform in ['web_pwa', 'android'] &&
+                       isStr(incoming().screen, 1, 80) &&
+                       isStr(incoming().visitorKey, 1, 128) &&
+                       isOptStr(incoming(), 'userId', 128) &&
+                       isValidTimestamp(incoming().createdAt);
+      allow update: if false;
+      allow delete: if isPlatformOwner();
+    }
+
+    match /supportTickets/{ticketId} {
+      allow create: if isValidId(ticketId) &&
+                       isStr(incoming().senderName, 1, 120) &&
+                       isOptStr(incoming(), 'senderEmail', 200) &&
+                       isOptStr(incoming(), 'orgId', 128) &&
+                       isOptStr(incoming(), 'orgName', 120) &&
+                       isStr(incoming().message, 3, 2000) &&
+                       incoming().status == 'open' &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       (!isSignedIn() || incoming().createdBy == request.auth.uid);
+      allow get, list: if isPlatformOwner() || (isSignedIn() && existing().createdBy == request.auth.uid);
+      allow update: if isPlatformOwner() &&
+                       incoming().status in ['open', 'reviewed', 'resolved'] &&
+                       isOptStr(incoming(), 'ownerReply', 1000);
+      allow delete: if isPlatformOwner();
+    }
+
+    function isValidAdminNotification(data) {
+      return data.category in ['new_user', 'security_alert', 'payment_request', 'support_ticket'] &&
+             data.severity in ['info', 'warning', 'critical'] &&
+             isStr(data.signalType, 1, 80) &&
+             isStr(data.titleEn, 1, 180) &&
+             isStr(data.titleAr, 1, 180) &&
+             isStr(data.bodyEn, 1, 1000) &&
+             isStr(data.bodyAr, 1, 1000) &&
+             isOptStr(data, 'actorUid', 128) &&
+             isOptStr(data, 'actorEmail', 200) &&
+             isOptStr(data, 'orgId', 128) &&
+             data.sourcePlatform in ['cloud_trigger', 'android', 'web_pwa'] &&
+             data.acknowledged is bool &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    match /adminNotifications/{notifId} {
+      allow get, list: if isPlatformOwner();
+      allow create: if isSignedIn() &&
+                       isValidId(notifId) &&
+                       isValidAdminNotification(incoming()) &&
+                       (
+                         isPlatformOwner() ||
+                         (
+                           incoming().category == 'security_alert' &&
+                           incoming().signalType in ['failed_admin_login', 'unauthorized_admin_attempt', 'unusual_price_spike', 'rapid_session_anomaly'] &&
+                           incoming().acknowledged == false &&
+                           incoming().createdAt == incoming().updatedAt &&
+                           (!('actorUid' in incoming()) || incoming().actorUid == '' || incoming().actorUid == request.auth.uid)
+                         )
+                       );
+      allow update: if isPlatformOwner() &&
+                       isValidId(notifId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['acknowledged', 'updatedAt']) &&
+                       incoming().acknowledged is bool &&
+                       isValidTimestamp(incoming().updatedAt);
+      allow delete: if isPlatformOwner() && isValidId(notifId);
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && ((isSignedIn() && request.auth.uid == userId) || isPlatformOwner());
+      allow list: if isPlatformOwner();
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().keys().hasAll(['userId', 'email', 'displayName', 'preferredLanguage', 'trialDurationHours', 'trialStartedAt', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId, true);
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       (
+                         (request.auth.uid == userId &&
+                          isValidUserProfile(incoming(), userId, false) &&
+                          incoming().userId == existing().userId &&
+                          incoming().createdAt == existing().createdAt &&
+                          incoming().trialStartedAt == existing().trialStartedAt &&
+                          incoming().trialDurationHours == existing().trialDurationHours &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'displayName', 'email', 'activeOrgId', 'preferredLanguage', 'darkMode',
+                            'themeMode', 'fontScale', 'timezone', 'dateFormat', 'numberFormat',
+                            'defaultCurrency', 'avatarLocalRef', 'contactPhoneOptional',
+                            'tourCompleted', 'notificationsEnabled', 'updatedAt'
+                          ])) ||
+                         isPlatformOwner()
+                       );
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+      match /sessions/{sessionId} {
+        allow get, list: if isSignedIn() && (request.auth.uid == userId || isPlatformOwner());
+        allow create, update: if isSignedIn() &&
+                                 request.auth.uid == userId &&
+                                 isValidId(sessionId) &&
+                                 incoming().userId == userId &&
+                                 isStr(incoming().deviceLabel, 1, 160);
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /organizations/{orgId} {
+      allow list: if (isSignedIn() && request.auth.uid in existing().memberUids) || isPlatformOwner();
+      allow get: if isValidId(orgId) && ((isSignedIn() && (existing().ownerId == request.auth.uid || request.auth.uid in existing().memberUids)) || isPlatformOwner());
+      allow create: if isSignedIn() &&
+                       isValidId(orgId) &&
+                       incoming().ownerId == request.auth.uid &&
+                       request.auth.uid in incoming().memberUids &&
+                       incoming().planTier == 'trial' &&
+                       incoming().subscriptionStatus in ['trial', 'expired'] &&
+                       incoming().keys().hasAll(['name', 'baseCurrency', 'ownerId', 'memberUids', 'roles', 'planTier', 'subscriptionStatus', 'trialDurationHours', 'trialStartedAt', 'trialEndsAt', 'createdAt', 'updatedAt']) &&
+                       isValidOrganization(incoming(), true);
+      allow update: if isSignedIn() &&
+                       isValidId(orgId) &&
+                       (
+                         (isPlatformOwner() &&
+                          incoming().ownerId == existing().ownerId &&
+                          incoming().createdAt == existing().createdAt &&
+                          incoming().trialStartedAt == existing().trialStartedAt &&
+                          isValidMemberList(incoming().memberUids) &&
+                          incoming().ownerId in incoming().memberUids &&
+                          incoming().roles is map &&
+                          incoming().roles[incoming().ownerId] == 'owner' &&
+                          isValidId(incoming().planTier) &&
+                          incoming().subscriptionStatus in ['trial', 'active', 'cancelled', 'expired'] &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['planTier', 'subscriptionStatus', 'trialEndsAt', 'trialDurationHours', 'memberUids', 'roles', 'updatedAt'])) ||
+                         (isValidOrganization(incoming(), false) &&
+                          incoming().ownerId == existing().ownerId &&
+                          incoming().createdAt == existing().createdAt &&
+                          incoming().trialStartedAt == existing().trialStartedAt &&
+                          incoming().trialEndsAt == existing().trialEndsAt &&
+                          incoming().trialDurationHours == existing().trialDurationHours &&
+                          incoming().planTier == existing().planTier &&
+                          incoming().subscriptionStatus == existing().subscriptionStatus &&
+                          (existing().ownerId == request.auth.uid || existing().roles[request.auth.uid] == 'admin') &&
+                          incoming().diff(existing()).affectedKeys().hasOnly([
+                            'name', 'baseCurrency', 'sectorType', 'brandTagline', 'countryState',
+                            'fiscalYearStart', 'taxEnabled', 'defaultTaxRatePct', 'memberUids', 'roles', 'updatedAt'
+                          ]))
+                       );
+      allow delete: if isSignedIn() && isValidId(orgId) && existing().ownerId == request.auth.uid;
+
+      match /products/{productId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(productId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(productId) && isValidProduct(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(productId) && isValidProduct(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'sku', 'category', 'description', 'unit', 'currency', 'location', 'source', 'currentPrice', 'previousPrice', 'memberUids', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(productId) && isOrgAdmin(orgId);
+      }
+
+      match /priceObservations/{obsId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(obsId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(obsId) && isValidPriceObservation(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(obsId) && isValidPriceObservation(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'location', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /inflationRecords/{recordId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(recordId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(recordId) && isValidInflationRecord(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(recordId) && isOrgAdmin(orgId);
+      }
+
+      match /priceBaskets/{basketId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(basketId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(basketId) && isValidPriceBasket(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(basketId) && isValidPriceBasket(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'currentPeriod', 'version', 'items', 'baseCost', 'currentCost', 'indexValue', 'periodSnapshots', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(basketId) && isOrgAdmin(orgId);
+      }
+
+      match /fxRates/{rateId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(rateId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(rateId) && isValidFxRate(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(rateId) && isValidFxRate(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /costSnapshots/{snapshotId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(snapshotId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(snapshotId) && isValidCostSnapshot(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(snapshotId) && isOrgAdmin(orgId);
+      }
+
+      match /scenarios/{scenarioId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(scenarioId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(scenarioId) && isValidScenario(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(scenarioId) && isOrgAdmin(orgId);
+      }
+
+      match /accounts/{accountId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(accountId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(accountId) && isValidAccount(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(accountId) && isValidAccount(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && isOrgAdmin(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'nameAr', 'openingBalance', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(accountId) && isOrgAdmin(orgId);
+      }
+
+      match /journalEntries/{entryId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(entryId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(entryId) && isValidJournalEntry(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(entryId) && isValidJournalEntry(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && (
+          (existing().status == 'draft' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'description', 'lines', 'totalDebit', 'totalCredit', 'updatedAt'])) ||
+          (existing().status == 'posted' && incoming().status == 'reversed' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reversedEntryId', 'updatedAt']))
+        );
+        allow delete: if false;
+      }
+
+      match /counterpartyItems/{itemId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(itemId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(itemId) && isValidCounterpartyItem(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(itemId) && isValidCounterpartyItem(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['paidAmount', 'status', 'dueDate', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(itemId) && isOrgAdmin(orgId);
+      }
+
+      match /budgets/{budgetId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(budgetId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(budgetId) && isValidBudget(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(budgetId) && isValidBudget(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && (
+          (existing().status == 'draft' && incoming().diff(existing()).affectedKeys().hasOnly(['plannedAmount', 'actualAmount', 'variance', 'variancePct', 'explanation', 'status', 'updatedAt'])) ||
+          (existing().status == 'approved' && incoming().diff(existing()).affectedKeys().hasOnly(['actualAmount', 'variance', 'variancePct', 'explanation', 'status', 'updatedAt']))
+        );
+        allow delete: if isSignedIn() && isValidId(budgetId) && isOrgAdmin(orgId);
+      }
+
+      match /inventoryItems/{itemId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(itemId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(itemId) && isValidInventoryItem(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(itemId) && isValidInventoryItem(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['quantityOnHand', 'totalBookValue', 'movingAvgCost', 'currentMarketPrice', 'fifoLots', 'valuationMethod', 'warehouse', 'batchNumber', 'expiryDate', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(itemId) && isOrgAdmin(orgId);
+      }
+
+      match /inventoryMovements/{moveId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(moveId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(moveId) && isValidInventoryMovement(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update, delete: if false;
+      }
+
+      match /stocktakes/{stocktakeId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(stocktakeId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(stocktakeId) && isValidStocktake(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(stocktakeId) && isValidStocktake(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && existing().status != 'posted' && canWriteFinancials(orgId) && (
+          (incoming().status in ['draft', 'in_review'] && incoming().diff(existing()).affectedKeys().hasOnly(['lines', 'totalDiscrepancyValue', 'status', 'updatedAt'])) ||
+          (incoming().status in ['approved', 'rejected', 'posted'] && isOrgAdmin(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['lines', 'totalDiscrepancyValue', 'status', 'reviewedBy', 'updatedAt']))
+        );
+        allow delete: if false;
+      }
+
+      match /ocrDrafts/{draftId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(draftId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(draftId) && isValidOcrDraft(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(draftId) && isValidOcrDraft(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['invoiceNumber', 'vendorName', 'documentDate', 'currency', 'subtotalAmount', 'discountAmount', 'taxAmount', 'totalAmount', 'lineSummary', 'duplicateWarning', 'reviewStatus', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(draftId) && isOrgAdmin(orgId);
+      }
+
+      match /auditLogs/{logId} {
+        allow list: if (isSignedIn() && request.auth.uid in existing().memberUids) || isPlatformOwner();
+        allow get: if isValidId(logId) && ((isSignedIn() && request.auth.uid in existing().memberUids) || isPlatformOwner());
+        allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming(), orgId) && (isOrgMember(orgId) || isPlatformOwner());
+        allow update, delete: if false;
+      }
+
+      match /standardCosts/{stdId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(stdId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(stdId) && isValidStandardCost(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(stdId) && isOrgAdmin(orgId);
+      }
+
+      match /bomFormulas/{bomId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(bomId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(bomId) && isValidBomFormula(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(bomId) && isValidBomFormula(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['productName', 'outputUnit', 'batchSize', 'ingredients', 'unitMaterialCost', 'scrapAllowancePct', 'notes', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(bomId) && isOrgAdmin(orgId);
+      }
+
+      match /productionOrders/{orderId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(orderId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(orderId) && isValidProductionOrder(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(orderId) && isValidProductionOrder(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && canWriteFinancials(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['goodUnits', 'scrapUnits', 'actualMaterialCost', 'actualLaborCost', 'actualOverheadCost', 'actualTotalCost', 'status', 'stages', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(orderId) && isOrgAdmin(orgId);
+      }
+
+      match /scrapLosses/{scrapId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(scrapId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(scrapId) && isValidScrapLoss(incoming(), orgId) && incoming().createdBy == request.auth.uid && canWriteFinancials(orgId);
+        allow update: if isSignedIn() && isValidId(scrapId) && isValidScrapLoss(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && existing().status == 'pending_approval' && incoming().status in ['approved', 'rejected'] && isOrgAdmin(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedBy', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /paymentRequests/{requestId} {
+        allow list: if (isSignedIn() && request.auth.uid in existing().memberUids) || isPlatformOwner();
+        allow get: if isValidId(requestId) && ((isSignedIn() && request.auth.uid in existing().memberUids) || isPlatformOwner());
+        allow create: if isSignedIn() && isValidId(requestId) && isValidPaymentRequest(incoming(), orgId) && incoming().createdBy == request.auth.uid && incoming().status == 'pending_verification' && isOrgMember(orgId);
+        allow update: if isPlatformOwner() &&
+                         isValidId(requestId) &&
+                         isValidPaymentRequest(incoming(), orgId) &&
+                         incoming().orgId == existing().orgId &&
+                         incoming().createdBy == existing().createdBy &&
+                         incoming().createdAt == existing().createdAt &&
+                         existing().status == 'pending_verification' &&
+                         incoming().status in ['approved', 'rejected'] &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedBy', 'decisionActorEmail', 'reviewNotes', 'updatedAt']);
+        allow delete: if false;
+      }
+
+      match /aiConversations/{convId} {
+        allow list: if isSignedIn() && request.auth.uid in existing().memberUids;
+        allow get: if isSignedIn() && isValidId(convId) && request.auth.uid in existing().memberUids;
+        allow create: if isSignedIn() && isValidId(convId) && isValidAiConversation(incoming(), orgId) && incoming().createdBy == request.auth.uid && isOrgMember(orgId);
+        allow update: if isSignedIn() && isValidId(convId) && isValidAiConversation(incoming(), orgId) && incoming().orgId == existing().orgId && incoming().createdBy == existing().createdBy && incoming().createdAt == existing().createdAt && isOrgMember(orgId) && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'mode', 'messages', 'updatedAt']);
+        allow delete: if isSignedIn() && isValidId(convId) && (existing().createdBy == request.auth.uid || isOrgAdmin(orgId));
+      }
+    }
+  }
+}

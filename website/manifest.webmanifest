@@ -1,0 +1,27 @@
+{
+  "name": "دليل رؤيتك المالي | FVG — Financial Vision Guide",
+  "short_name": "FVG",
+  "description": "منصة المحاسبة الإدارية والتكاليف والتسعير واتخاذ القرار المالي.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAF2E8",
+  "theme_color": "#022A27",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "./assets/fvg_logo_dark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/fvg-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

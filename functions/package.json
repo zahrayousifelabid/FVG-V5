@@ -1,0 +1,21 @@
+{
+  "name": "fvg-functions",
+  "description": "Firebase Cloud Functions for FVG (Financial Vision Guide) automated welcome & owner notification emails",
+  "version": "1.0.0",
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "lint": "node --check index.js && node --check mailTemplate.js && node --check adminNotificationHelpers.js",
+    "test": "node --test test/adminNotifications.test.js test/welcomeMail.test.js",
+    "serve": "firebase emulators:start --only functions,firestore,auth",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1",
+    "firebase-functions": "^7.4.0",
+    "nodemailer": "^10.6.1"
+  },
+  "private": true
+}

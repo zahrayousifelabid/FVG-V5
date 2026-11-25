@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fvg_deep_green">#022A27</color>
+    <color name="fvg_forest_green">#15423A</color>
+    <color name="fvg_muted_forest">#3B574F</color>
+    <color name="fvg_soft_teal">#517D77</color>
+    <color name="fvg_warm_gold">#DDB065</color>
+    <color name="fvg_antique_gold">#AF8240</color>
+    <color name="fvg_warm_ivory">#FAF2E8</color>
+    <color name="fvg_soft_cream">#F2E8D9</color>
+    <color name="fvg_warm_stone">#DCD7C8</color>
+    <color name="fvg_muted_grey">#6D6F67</color>
+</resources>

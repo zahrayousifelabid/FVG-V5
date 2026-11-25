@@ -1,0 +1,816 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile, display preferences, and immutable server-anchored 168h (7-day) trial start.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "activeOrgId": { "type": "string" },
+        "preferredLanguage": { "type": "string", "enum": ["en", "ar"] },
+        "darkMode": { "type": "boolean" },
+        "themeMode": { "type": "string", "enum": ["light", "dark", "system"] },
+        "fontScale": { "type": "number" },
+        "timezone": { "type": "string" },
+        "dateFormat": { "type": "string" },
+        "numberFormat": { "type": "string" },
+        "defaultCurrency": { "type": "string" },
+        "avatarLocalRef": { "type": "string" },
+        "contactPhoneOptional": { "type": "string" },
+        "tourCompleted": { "type": "boolean" },
+        "notificationsEnabled": { "type": "boolean" },
+        "trialDurationHours": { "type": "integer" },
+        "trialStartedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "displayName", "preferredLanguage", "trialDurationHours", "trialStartedAt", "createdAt", "updatedAt"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Tenant organization with base currency, sector, member RBAC roles, and immutable 7-day (168h) trial window.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "baseCurrency": { "type": "string" },
+        "sectorType": { "type": "string" },
+        "brandTagline": { "type": "string" },
+        "countryState": { "type": "string" },
+        "fiscalYearStart": { "type": "string" },
+        "taxEnabled": { "type": "boolean" },
+        "defaultTaxRatePct": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "roles": { "type": "object" },
+        "planTier": { "type": "string", "enum": ["trial", "starter", "professional", "enterprise"] },
+        "subscriptionStatus": { "type": "string", "enum": ["trial", "active", "cancelled", "expired"] },
+        "trialDurationHours": { "type": "integer" },
+        "trialStartedAt": { "type": "string", "format": "date-time" },
+        "trialEndsAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "baseCurrency", "ownerId", "memberUids", "roles", "planTier", "subscriptionStatus", "trialDurationHours", "trialStartedAt", "trialEndsAt", "createdAt", "updatedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Registered product, raw material, or cost item.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "unit": { "type": "string" },
+        "currency": { "type": "string" },
+        "location": { "type": "string" },
+        "source": { "type": "string" },
+        "currentPrice": { "type": "string" },
+        "previousPrice": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "name", "category", "unit", "currency", "currentPrice", "previousPrice", "createdAt", "updatedAt"]
+    },
+    "PriceObservation": {
+      "title": "PriceObservation",
+      "description": "Immutable historical price observation with calculated delta and source metadata.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "currency": { "type": "string" },
+        "price": { "type": "string" },
+        "previousPrice": { "type": "string" },
+        "absChange": { "type": "string" },
+        "pctChange": { "type": "string" },
+        "direction": { "type": "string", "enum": ["increased", "decreased", "unchanged"] },
+        "source": { "type": "string" },
+        "location": { "type": "string" },
+        "observationDate": { "type": "string" },
+        "notes": { "type": "string" },
+        "attachmentRef": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "productId", "productName", "category", "unit", "currency", "price", "previousPrice", "absChange", "pctChange", "direction", "source", "location", "observationDate", "createdAt", "updatedAt"]
+    },
+    "InflationRecord": {
+      "title": "InflationRecord",
+      "description": "Monthly, annual, and cumulative inflation record with explicit source classification.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "period": { "type": "string" },
+        "category": { "type": "string" },
+        "monthlyRatePct": { "type": "string" },
+        "annualRatePct": { "type": "string" },
+        "indexValue": { "type": "string" },
+        "basePeriod": { "type": "string" },
+        "sourceType": { "type": "string", "enum": ["official", "manual", "calculated", "provisional"] },
+        "sourceName": { "type": "string" },
+        "formulaNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "period", "category", "monthlyRatePct", "indexValue", "basePeriod", "sourceType", "sourceName", "formulaNote", "createdAt", "updatedAt"]
+    },
+    "PriceBasket": {
+      "title": "PriceBasket",
+      "description": "Weighted price basket with versioned period index snapshots.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "name": { "type": "string" },
+        "basePeriod": { "type": "string" },
+        "currentPeriod": { "type": "string" },
+        "currency": { "type": "string" },
+        "version": { "type": "integer" },
+        "items": { "type": "array" },
+        "baseCost": { "type": "string" },
+        "currentCost": { "type": "string" },
+        "indexValue": { "type": "string" },
+        "periodSnapshots": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "name", "basePeriod", "currentPeriod", "currency", "version", "items", "baseCost", "currentCost", "indexValue", "createdAt", "updatedAt"]
+    },
+    "FxRate": {
+      "title": "FxRate",
+      "description": "Historical foreign exchange rate with manual entry defaults, approval status, and source classification.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "baseCurrency": { "type": "string" },
+        "quoteCurrency": { "type": "string" },
+        "rate": { "type": "string" },
+        "effectiveDate": { "type": "string" },
+        "effectiveTime": { "type": "string" },
+        "rateType": { "type": "string", "enum": ["official", "market", "manual"] },
+        "sourceKind": { "type": "string" },
+        "sourceName": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "approved", "cancelled"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "baseCurrency", "quoteCurrency", "rate", "effectiveDate", "rateType", "sourceName", "createdAt", "updatedAt"]
+    },
+    "CostSnapshot": {
+      "title": "CostSnapshot",
+      "description": "Immutable deterministic cost, pricing, margin/markup, risk, and break-even snapshot across all 8 costing methods.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "period": { "type": "string" },
+        "currency": { "type": "string" },
+        "costingMethod": { "type": "string", "enum": ["standard", "actual", "target", "abc", "job_order", "process", "absorption", "variable"] },
+        "directMaterial": { "type": "string" },
+        "indirectMaterial": { "type": "string" },
+        "directLabor": { "type": "string" },
+        "indirectLabor": { "type": "string" },
+        "overhead": { "type": "string" },
+        "energyFuel": { "type": "string" },
+        "packaging": { "type": "string" },
+        "transport": { "type": "string" },
+        "wasteScrap": { "type": "string" },
+        "fixedCosts": { "type": "string" },
+        "goodUnits": { "type": "string" },
+        "totalCost": { "type": "string" },
+        "unitCost": { "type": "string" },
+        "sellingPrice": { "type": "string" },
+        "revenue": { "type": "string" },
+        "grossProfit": { "type": "string" },
+        "netProfit": { "type": "string" },
+        "profitMarginPct": { "type": "string" },
+        "markupPct": { "type": "string" },
+        "breakEvenUnits": { "type": "string" },
+        "riskLevel": { "type": "string" },
+        "formulaVersion": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "productId", "productName", "period", "currency", "costingMethod", "directMaterial", "directLabor", "overhead", "goodUnits", "totalCost", "unitCost", "sellingPrice", "profitMarginPct", "markupPct", "formulaVersion", "createdAt", "updatedAt"]
+    },
+    "Scenario": {
+      "title": "Scenario",
+      "description": "What-if pricing, inflation, FX, and volume sensitivity scenario linked to a cost snapshot.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "snapshotId": { "type": "string" },
+        "name": { "type": "string" },
+        "scenarioType": { "type": "string" },
+        "materialChangePct": { "type": "string" },
+        "laborChangePct": { "type": "string" },
+        "overheadChangePct": { "type": "string" },
+        "priceChangePct": { "type": "string" },
+        "fxChangePct": { "type": "string" },
+        "volumeChangePct": { "type": "string" },
+        "baseTotalCost": { "type": "string" },
+        "scenarioTotalCost": { "type": "string" },
+        "baseProfit": { "type": "string" },
+        "scenarioProfit": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "snapshotId", "name", "materialChangePct", "laborChangePct", "overheadChangePct", "priceChangePct", "baseTotalCost", "scenarioTotalCost", "baseProfit", "scenarioProfit", "createdAt", "updatedAt"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Chart of Accounts entry.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "accountType": { "type": "string", "enum": ["asset", "liability", "equity", "revenue", "expense", "cogs"] },
+        "subType": { "type": "string" },
+        "normalBalance": { "type": "string", "enum": ["debit", "credit"] },
+        "openingBalance": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "code", "name", "accountType", "subType", "normalBalance", "openingBalance", "createdAt", "updatedAt"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "Double-entry accounting journal entry with balanced debit/credit enforcement.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "referenceNo": { "type": "string" },
+        "entryDate": { "type": "string" },
+        "period": { "type": "string" },
+        "description": { "type": "string" },
+        "currency": { "type": "string" },
+        "exchangeRate": { "type": "string" },
+        "originalCurrency": { "type": "string" },
+        "originalAmount": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "posted", "reversed"] },
+        "lines": { "type": "array" },
+        "totalDebit": { "type": "string" },
+        "totalCredit": { "type": "string" },
+        "sourceModule": { "type": "string" },
+        "reversedEntryId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "referenceNo", "entryDate", "period", "description", "currency", "exchangeRate", "status", "lines", "totalDebit", "totalCredit", "createdAt", "updatedAt"]
+    },
+    "CounterpartyItem": {
+      "title": "CounterpartyItem",
+      "description": "Accounts Receivable or Accounts Payable invoice record.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "type": { "type": "string", "enum": ["receivable", "payable"] },
+        "partyName": { "type": "string" },
+        "invoiceNo": { "type": "string" },
+        "currency": { "type": "string" },
+        "amount": { "type": "string" },
+        "paidAmount": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "partial", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "type", "partyName", "invoiceNo", "currency", "amount", "paidAmount", "dueDate", "status", "createdAt", "updatedAt"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "Versioned operating, revenue, expense, or cash budget with variance tracking.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "name": { "type": "string" },
+        "budgetType": { "type": "string", "enum": ["annual", "monthly", "revenue", "expense", "cash", "operating"] },
+        "period": { "type": "string" },
+        "version": { "type": "integer" },
+        "currency": { "type": "string" },
+        "plannedAmount": { "type": "string" },
+        "actualAmount": { "type": "string" },
+        "variance": { "type": "string" },
+        "variancePct": { "type": "string" },
+        "explanation": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "approved", "superseded"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "name", "budgetType", "period", "version", "currency", "plannedAmount", "actualAmount", "variance", "variancePct", "status", "createdAt", "updatedAt"]
+    },
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "Inventory item with FIFO lots, moving weighted average, and market replacement price.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "sku": { "type": "string" },
+        "name": { "type": "string" },
+        "itemType": { "type": "string", "enum": ["raw_material", "finished_good"] },
+        "unit": { "type": "string" },
+        "warehouse": { "type": "string" },
+        "currency": { "type": "string" },
+        "valuationMethod": { "type": "string", "enum": ["fifo", "moving_avg"] },
+        "quantityOnHand": { "type": "string" },
+        "totalBookValue": { "type": "string" },
+        "movingAvgCost": { "type": "string" },
+        "currentMarketPrice": { "type": "string" },
+        "fifoLots": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "sku", "name", "itemType", "unit", "warehouse", "currency", "valuationMethod", "quantityOnHand", "totalBookValue", "movingAvgCost", "currentMarketPrice", "fifoLots", "createdAt", "updatedAt"]
+    },
+    "InventoryMovement": {
+      "title": "InventoryMovement",
+      "description": "Immutable inventory movement, adjustment, or scrap record.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "movementType": { "type": "string", "enum": ["receipt", "issue", "transfer", "return", "adjustment", "scrap", "damaged", "expired"] },
+        "quantity": { "type": "string" },
+        "unitCost": { "type": "string" },
+        "totalCost": { "type": "string" },
+        "warehouse": { "type": "string" },
+        "reason": { "type": "string" },
+        "referenceNo": { "type": "string" },
+        "movementDate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "itemId", "itemName", "movementType", "quantity", "unitCost", "totalCost", "warehouse", "reason", "referenceNo", "movementDate", "createdAt", "updatedAt"]
+    },
+    "StocktakeSession": {
+      "title": "StocktakeSession",
+      "description": "Physical stocktaking session with review, approval, and posting workflow.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "sessionName": { "type": "string" },
+        "warehouse": { "type": "string" },
+        "sessionDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "in_review", "approved", "rejected", "posted"] },
+        "lines": { "type": "array" },
+        "totalDiscrepancyValue": { "type": "string" },
+        "reviewedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "sessionName", "warehouse", "sessionDate", "status", "lines", "totalDiscrepancyValue", "createdAt", "updatedAt"]
+    },
+    "OcrDraft": {
+      "title": "OcrDraft",
+      "description": "Document/invoice OCR extraction draft awaiting human verification.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "fileName": { "type": "string" },
+        "extractedText": { "type": "string" },
+        "vendorName": { "type": "string" },
+        "documentDate": { "type": "string" },
+        "currency": { "type": "string" },
+        "totalAmount": { "type": "string" },
+        "confidenceNote": { "type": "string" },
+        "lineSummary": { "type": "string" },
+        "reviewStatus": { "type": "string", "enum": ["pending_review", "verified", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "fileName", "extractedText", "vendorName", "documentDate", "currency", "totalAmount", "reviewStatus", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable organization audit trail entry.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "action": { "type": "string" },
+        "entityType": { "type": "string" },
+        "entityId": { "type": "string" },
+        "summary": { "type": "string" },
+        "actorEmail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "action", "entityType", "entityId", "summary", "actorEmail", "createdAt"]
+    },
+    "StandardCostSheet": {
+      "title": "StandardCostSheet",
+      "description": "Versioned standard unit cost baseline (material, labor hours/rate, overhead).",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "version": { "type": "integer" },
+        "currency": { "type": "string" },
+        "standardMaterialCost": { "type": "string" },
+        "standardLaborHours": { "type": "string" },
+        "standardLaborRate": { "type": "string" },
+        "standardOverheadPerUnit": { "type": "string" },
+        "standardUnitCost": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "productId", "productName", "version", "currency", "standardMaterialCost", "standardLaborHours", "standardLaborRate", "standardOverheadPerUnit", "standardUnitCost", "createdAt", "updatedAt"]
+    },
+    "ProductionOrder": {
+      "title": "ProductionOrder",
+      "description": "Multi-stage manufacturing/production order with planned/good/scrap units and actual costs.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "period": { "type": "string" },
+        "currency": { "type": "string" },
+        "plannedUnits": { "type": "string" },
+        "goodUnits": { "type": "string" },
+        "scrapUnits": { "type": "string" },
+        "actualMaterialCost": { "type": "string" },
+        "actualLaborCost": { "type": "string" },
+        "actualOverheadCost": { "type": "string" },
+        "actualTotalCost": { "type": "string" },
+        "status": { "type": "string", "enum": ["planned", "in_progress", "completed"] },
+        "stages": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "productId", "productName", "period", "currency", "plannedUnits", "goodUnits", "scrapUnits", "actualMaterialCost", "actualLaborCost", "actualOverheadCost", "actualTotalCost", "status", "stages", "createdAt", "updatedAt"]
+    },
+    "ScrapLoss": {
+      "title": "ScrapLoss",
+      "description": "Scrap, damaged, or expired inventory loss request requiring admin approval.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "lossType": { "type": "string", "enum": ["scrap", "damaged", "expired"] },
+        "quantity": { "type": "string" },
+        "unitCost": { "type": "string" },
+        "totalLossCost": { "type": "string" },
+        "reason": { "type": "string" },
+        "lossDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending_approval", "approved", "rejected"] },
+        "reviewedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "itemId", "itemName", "lossType", "quantity", "unitCost", "totalLossCost", "reason", "lossDate", "status", "createdAt", "updatedAt"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "Manual bank transfer / Bankak / O-Cash subscription payment proof awaiting Platform Owner verification.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "planTier": { "type": "string", "enum": ["starter", "professional", "enterprise"] },
+        "paymentMethod": { "type": "string", "enum": ["bankak", "ocash", "fawry", "bank_transfer"] },
+        "amount": { "type": "string" },
+        "currency": { "type": "string" },
+        "senderName": { "type": "string" },
+        "referenceNo": { "type": "string" },
+        "last4Digits": { "type": "string" },
+        "transferDate": { "type": "string" },
+        "attachmentNote": { "type": "string" },
+        "notes": { "type": "string" },
+        "receiptMatchStatus": { "type": "string" },
+        "receiptMatchNote": { "type": "string" },
+        "expectedPlanAmount": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending_verification", "approved", "rejected"] },
+        "reviewedBy": { "type": "string" },
+        "decisionActorEmail": { "type": "string" },
+        "reviewNotes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "planTier", "paymentMethod", "amount", "currency", "senderName", "referenceNo", "transferDate", "status", "createdAt", "updatedAt"]
+    },
+    "AiConversation": {
+      "title": "AiConversation",
+      "description": "Persistent multi-session Financial Assistant chat conversation.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "title": { "type": "string" },
+        "mode": { "type": "string", "enum": ["general", "financial", "ocr"] },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "title", "mode", "messages", "createdAt", "updatedAt"]
+    },
+    "BomFormula": {
+      "title": "BomFormula",
+      "description": "Manufacturing Bill of Materials formula with scrap allowance.",
+      "type": "object",
+      "properties": {
+        "orgId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "productName": { "type": "string" },
+        "outputUnit": { "type": "string" },
+        "batchSize": { "type": "string" },
+        "ingredients": { "type": "array" },
+        "unitMaterialCost": { "type": "string" },
+        "scrapAllowancePct": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orgId", "ownerId", "memberUids", "createdBy", "productName", "outputUnit", "batchSize", "ingredients", "unitMaterialCost", "scrapAllowancePct", "createdAt", "updatedAt"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Simplified Contact Us / Support inquiry routed to Platform Owner Console.",
+      "type": "object",
+      "properties": {
+        "createdBy": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "orgId": { "type": "string" },
+        "orgName": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "reviewed", "resolved"] },
+        "ownerReply": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderName", "message", "status", "createdAt", "updatedAt"]
+    },
+    "PlatformPlan": {
+      "title": "PlatformPlan",
+      "description": "Subscription tier definition and feature entitlements controlled exclusively by Platform Owner.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "enum": ["starter", "professional", "enterprise"] },
+        "tierLevel": { "type": "integer" },
+        "nameEn": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "priceUsd": { "type": "string" },
+        "priceSdg": { "type": "string" },
+        "billingCycle": { "type": "string" },
+        "maxOrgs": { "type": "integer" },
+        "maxUsers": { "type": "integer" },
+        "maxProducts": { "type": "integer" },
+        "allowAllCostingMethods": { "type": "boolean" },
+        "allowBomAndProduction": { "type": "boolean" },
+        "allowAiAssistant": { "type": "boolean" },
+        "allowOcr": { "type": "boolean" },
+        "allowPdfXlsxExport": { "type": "boolean" },
+        "allowAuditAndBackup": { "type": "boolean" },
+        "allowSectorAdvancedTools": { "type": "boolean" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["key", "nameEn", "nameAr", "priceUsd", "priceSdg"]
+    },
+    "MailOutbox": {
+      "title": "MailOutbox",
+      "description": "Firebase Trigger Email compatible outbox record queued from Financialvisionguide@gmail.com.",
+      "type": "object",
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "array" },
+        "createdBy": { "type": "string" },
+        "mailType": { "type": "string", "enum": ["welcome", "notification", "payment_update", "trial_expired"] },
+        "message": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["from", "to", "createdBy", "mailType", "message", "createdAt"]
+    },
+    "PlatformVisit": {
+      "title": "PlatformVisit",
+      "description": "Measured Web PWA & Android session telemetry event readable only by Platform Owner.",
+      "type": "object",
+      "properties": {
+        "platform": { "type": "string", "enum": ["web_pwa", "android"] },
+        "screen": { "type": "string" },
+        "visitorKey": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["platform", "screen", "visitorKey", "createdAt"]
+    },
+    "AdminNotification": {
+      "title": "AdminNotification",
+      "description": "Real-time Platform Owner alert for new registrations, suspicious security events, price spikes, and payment proofs.",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string", "enum": ["new_user", "security_alert", "payment_request", "support_ticket"] },
+        "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+        "signalType": { "type": "string" },
+        "titleEn": { "type": "string" },
+        "titleAr": { "type": "string" },
+        "bodyEn": { "type": "string" },
+        "bodyAr": { "type": "string" },
+        "actorUid": { "type": "string" },
+        "actorEmail": { "type": "string" },
+        "orgId": { "type": "string" },
+        "sourcePlatform": { "type": "string", "enum": ["cloud_trigger", "android", "web_pwa"] },
+        "acknowledged": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["category", "severity", "signalType", "titleEn", "titleAr", "bodyEn", "bodyAr", "sourcePlatform", "acknowledged", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile document"
+    },
+    "/platformPlans/{planId}": {
+      "schema": { "$ref": "#/entities/PlatformPlan" },
+      "description": "Subscription plans configured by Platform Owner"
+    },
+    "/announcements/{annId}": {
+      "description": "In-app announcements published by Platform Owner"
+    },
+    "/mail/{mailId}": {
+      "schema": { "$ref": "#/entities/MailOutbox" },
+      "description": "Automated welcome emails and owner notifications outbox"
+    },
+    "/platformVisits/{visitId}": {
+      "schema": { "$ref": "#/entities/PlatformVisit" },
+      "description": "Measured session/visit telemetry for Owner Admin analytics"
+    },
+    "/supportTickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Customer inquiries & complaints"
+    },
+    "/adminNotifications/{notifId}": {
+      "schema": { "$ref": "#/entities/AdminNotification" },
+      "description": "Real-time notifications and security alerts for Platform Owner Console"
+    },
+    "/organizations/{orgId}": {
+      "schema": { "$ref": "#/entities/Organization" },
+      "description": "Organization tenant root"
+    },
+    "/organizations/{orgId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Registered products and cost items"
+    },
+    "/organizations/{orgId}/priceObservations/{obsId}": {
+      "schema": { "$ref": "#/entities/PriceObservation" },
+      "description": "Historical price observations"
+    },
+    "/organizations/{orgId}/inflationRecords/{recordId}": {
+      "schema": { "$ref": "#/entities/InflationRecord" },
+      "description": "Inflation series records"
+    },
+    "/organizations/{orgId}/priceBaskets/{basketId}": {
+      "schema": { "$ref": "#/entities/PriceBasket" },
+      "description": "Weighted price baskets"
+    },
+    "/organizations/{orgId}/fxRates/{rateId}": {
+      "schema": { "$ref": "#/entities/FxRate" },
+      "description": "Historical FX rates"
+    },
+    "/organizations/{orgId}/costSnapshots/{snapshotId}": {
+      "schema": { "$ref": "#/entities/CostSnapshot" },
+      "description": "Costing and pricing snapshots"
+    },
+    "/organizations/{orgId}/scenarios/{scenarioId}": {
+      "schema": { "$ref": "#/entities/Scenario" },
+      "description": "What-if sensitivity scenarios"
+    },
+    "/organizations/{orgId}/accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/Account" },
+      "description": "Chart of Accounts"
+    },
+    "/organizations/{orgId}/journalEntries/{entryId}": {
+      "schema": { "$ref": "#/entities/JournalEntry" },
+      "description": "Journal entries"
+    },
+    "/organizations/{orgId}/counterpartyItems/{itemId}": {
+      "schema": { "$ref": "#/entities/CounterpartyItem" },
+      "description": "Receivables and payables"
+    },
+    "/organizations/{orgId}/budgets/{budgetId}": {
+      "schema": { "$ref": "#/entities/Budget" },
+      "description": "Budgets and versions"
+    },
+    "/organizations/{orgId}/inventoryItems/{itemId}": {
+      "schema": { "$ref": "#/entities/InventoryItem" },
+      "description": "Inventory items and valuation"
+    },
+    "/organizations/{orgId}/inventoryMovements/{moveId}": {
+      "schema": { "$ref": "#/entities/InventoryMovement" },
+      "description": "Inventory movements and scrap"
+    },
+    "/organizations/{orgId}/stocktakes/{stocktakeId}": {
+      "schema": { "$ref": "#/entities/StocktakeSession" },
+      "description": "Physical stocktaking sessions"
+    },
+    "/organizations/{orgId}/ocrDrafts/{draftId}": {
+      "schema": { "$ref": "#/entities/OcrDraft" },
+      "description": "OCR extracted drafts pending review"
+    },
+    "/organizations/{orgId}/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable audit logs"
+    },
+    "/organizations/{orgId}/standardCosts/{stdId}": {
+      "schema": { "$ref": "#/entities/StandardCostSheet" },
+      "description": "Versioned standard cost sheets"
+    },
+    "/organizations/{orgId}/bomFormulas/{bomId}": {
+      "schema": { "$ref": "#/entities/BomFormula" },
+      "description": "Manufacturing BOM formulas"
+    },
+    "/organizations/{orgId}/productionOrders/{orderId}": {
+      "schema": { "$ref": "#/entities/ProductionOrder" },
+      "description": "Multi-stage production orders"
+    },
+    "/organizations/{orgId}/scrapLosses/{scrapId}": {
+      "schema": { "$ref": "#/entities/ScrapLoss" },
+      "description": "Scrap and loss approval requests"
+    },
+    "/organizations/{orgId}/paymentRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/PaymentRequest" },
+      "description": "Manual payment proof requests for subscription activation"
+    },
+    "/organizations/{orgId}/aiConversations/{convId}": {
+      "schema": { "$ref": "#/entities/AiConversation" },
+      "description": "Financial Assistant persistent conversations"
+    }
+  }
+}
